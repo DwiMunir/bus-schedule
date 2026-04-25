@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { busData, type JenisLayanan } from "@/lib/busData";
 
 const akapCount = busData.filter((b) => b.jenis_layanan === "AKAP").length;
@@ -32,11 +32,34 @@ function RouteIcon() {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180 text-slate-600" : "text-slate-300"}`}
+      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg className={`w-3.5 h-3.5 shrink-0 ${className ?? ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+    </svg>
+  );
+}
+
+const PREVIEW_COUNT = 3;
+
 export default function Home() {
   const [filter, setFilter] = useState<"ALL" | JenisLayanan>("ALL");
   const [search, setSearch] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const filtered = useMemo(() => {
+    setExpandedRows(new Set());
     const q = search.toLowerCase();
     return busData.filter((b) => {
       if (filter !== "ALL" && b.jenis_layanan !== filter) return false;
@@ -44,6 +67,14 @@ export default function Home() {
       return true;
     });
   }, [filter, search]);
+
+  function toggleRow(i: number) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -65,12 +96,8 @@ export default function Home() {
             </div>
           </div>
           <div className="flex gap-2 text-xs shrink-0">
-            <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-full font-medium">
-              AKAP
-            </span>
-            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full font-medium">
-              AKDP
-            </span>
+            <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-full font-medium">AKAP</span>
+            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full font-medium">AKDP</span>
           </div>
         </div>
       </header>
@@ -96,7 +123,6 @@ export default function Home() {
 
         {/* Controls */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          {/* Segmented filter */}
           <div className="flex gap-1 bg-slate-200/70 p-1 rounded-xl w-fit">
             {(["ALL", "AKAP", "AKDP"] as const).map((v) => (
               <button
@@ -112,8 +138,6 @@ export default function Home() {
               </button>
             ))}
           </div>
-
-          {/* Search */}
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
               <SearchIcon />
@@ -123,9 +147,9 @@ export default function Home() {
               placeholder="Cari nama PO atau rute…"
               value={search}
               onChange={(e) => {
-              setSearch(e.target.value);
-              if (e.target.value) setFilter("ALL");
-            }}
+                setSearch(e.target.value);
+                if (e.target.value) setFilter("ALL");
+              }}
               className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition placeholder-slate-400"
             />
           </div>
@@ -133,7 +157,7 @@ export default function Home() {
 
         {/* Result count */}
         <p className="text-xs text-slate-400 mb-4 font-medium tracking-wide uppercase">
-          {filtered.length} hasil ditemukan
+          {filtered.length} hasil · klik baris untuk lihat jadwal lengkap
         </p>
 
         {/* Table card */}
@@ -141,20 +165,21 @@ export default function Home() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
+                <tr className="border-b border-slate-100 bg-slate-50/60">
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide w-10">#</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Nama PO</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Rute</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Jarak</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Layanan</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Tarif</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Jam Keberangkatan</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Jadwal</th>
+                  <th className="w-12"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-16 text-center text-slate-400 text-sm">
+                    <td colSpan={8} className="px-5 py-16 text-center text-slate-400 text-sm">
                       <div className="flex flex-col items-center gap-2">
                         <SearchIcon />
                         <span>Tidak ada data yang sesuai</span>
@@ -164,53 +189,108 @@ export default function Home() {
                 ) : (
                   filtered.map((bus, i) => {
                     const isAkap = bus.jenis_layanan === "AKAP";
+                    const isOpen = expandedRows.has(i);
+                    const accentBar = isAkap ? "bg-blue-500" : "bg-emerald-500";
+                    const chipBase = isAkap
+                      ? "bg-blue-50 text-blue-700 border-blue-100"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-100";
+                    const accentText = isAkap ? "text-blue-600" : "text-emerald-600";
+                    const expandBg = isAkap ? "bg-blue-50/50" : "bg-emerald-50/50";
+                    const previewJadwal = bus.jadwal.slice(0, PREVIEW_COUNT);
+                    const remainingCount = bus.jadwal.length - PREVIEW_COUNT;
+
                     return (
-                      <tr
-                        key={i}
-                        className="border-t border-slate-100 hover:bg-slate-50/80 transition-colors align-top group"
-                      >
-                        <td className="px-5 py-4 text-slate-300 text-xs">{i + 1}</td>
-                        <td className="px-5 py-4">
-                          <span className="font-semibold text-slate-800">{bus.nama_po}</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-start gap-1.5 text-slate-600">
-                            <RouteIcon />
-                            <span className="leading-snug">{bus.rute}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-slate-500 whitespace-nowrap text-xs font-medium">
-                          {bus.jarak}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                            isAkap
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          }`}>
-                            {bus.jenis_layanan}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-slate-600 whitespace-nowrap text-xs">
-                          {bus.tarif}
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex flex-wrap gap-1 max-w-sm">
-                            {bus.jadwal.map((jam) => (
-                              <span
-                                key={jam}
-                                className={`px-2 py-0.5 rounded-md text-xs font-mono border ${
-                                  isAkap
-                                    ? "bg-blue-50 text-blue-700 border-blue-100"
-                                    : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                }`}
-                              >
-                                {jam}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
+                      <Fragment key={i}>
+                        {/* ── Main row ── */}
+                        <tr
+                          onClick={() => toggleRow(i)}
+                          className={`border-t border-slate-100 cursor-pointer select-none transition-colors ${
+                            isOpen ? (isAkap ? "bg-blue-50/30" : "bg-emerald-50/30") : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <td className="px-5 py-4 text-slate-300 text-xs">{i + 1}</td>
+                          <td className="px-5 py-4 font-semibold text-slate-800 whitespace-nowrap">
+                            {bus.nama_po}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex items-start gap-1.5 text-slate-600">
+                              <RouteIcon />
+                              <span className="leading-snug">{bus.rute}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-slate-500 whitespace-nowrap text-xs font-medium">
+                            {bus.jarak}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                              isAkap
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}>
+                              {bus.jenis_layanan}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-600 whitespace-nowrap text-xs">
+                            {bus.tarif}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {previewJadwal.map((jam) => (
+                                <span key={jam} className={`px-2 py-0.5 rounded text-xs font-mono border ${chipBase}`}>
+                                  {jam}
+                                </span>
+                              ))}
+                              {remainingCount > 0 && (
+                                <span className={`text-xs font-medium ${accentText}`}>
+                                  +{remainingCount}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="pr-5 py-4 text-right">
+                            <ChevronIcon open={isOpen} />
+                          </td>
+                        </tr>
+
+                        {/* ── Expanded panel ── */}
+                        {isOpen && (
+                          <tr className="border-t border-slate-100">
+                            <td colSpan={8} className="p-0">
+                              <div className={`relative ${expandBg}`}>
+                                {/* Left accent bar */}
+                                <div className={`absolute left-0 top-0 bottom-0 w-0.75 ${accentBar}`} />
+
+                                <div className="px-5 py-4 pl-8">
+                                  {/* Panel header */}
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <ClockIcon className={accentText} />
+                                    <span className={`text-xs font-semibold ${accentText}`}>
+                                      Jadwal Keberangkatan
+                                    </span>
+                                    <span className="bg-white border border-slate-200 text-slate-500 text-xs px-1.5 py-0.5 rounded font-semibold">
+                                      {bus.jadwal.length}× trip
+                                    </span>
+                                  </div>
+
+                                  {/* All chips */}
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {bus.jadwal.map((jam) => (
+                                      <span
+                                        key={jam}
+                                        className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold border shadow-sm bg-white ${
+                                          isAkap ? "text-blue-700 border-blue-200" : "text-emerald-700 border-emerald-200"
+                                        }`}
+                                      >
+                                        {jam}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })
                 )}
@@ -222,11 +302,11 @@ export default function Home() {
         {/* Legend */}
         <div className="mt-5 flex flex-wrap gap-5 text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             <span>AKAP — Antar Kota Antar Provinsi</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span>AKDP — Antar Kota Dalam Provinsi</span>
           </div>
         </div>
