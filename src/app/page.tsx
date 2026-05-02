@@ -1,10 +1,9 @@
 "use client";
 
-import { Fragment, useState, useMemo } from "react";
-import { busData, type JenisLayanan } from "@/lib/busData";
+import { Fragment, useDeferredValue } from "react";
 
-const akapCount = busData.filter((b) => b.jenis_layanan === "AKAP").length;
-const akdpCount = busData.filter((b) => b.jenis_layanan === "AKDP").length;
+import { useBusServicesQuery } from "@/lib/busServiceQueries";
+import { useBusScheduleStore, type BusScheduleFilter } from "@/lib/busScheduleStore";
 
 function SearchIcon() {
   return (
@@ -54,27 +53,24 @@ function ClockIcon({ className }: { className?: string }) {
 const PREVIEW_COUNT = 3;
 
 export default function Home() {
-  const [filter, setFilter] = useState<"ALL" | JenisLayanan>("ALL");
-  const [search, setSearch] = useState("");
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-
-  const filtered = useMemo(() => {
-    setExpandedRows(new Set());
-    const q = search.toLowerCase();
-    return busData.filter((b) => {
-      if (filter !== "ALL" && b.jenis_layanan !== filter) return false;
-      if (q && !b.nama_po.toLowerCase().includes(q) && !b.rute.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [filter, search]);
-
-  function toggleRow(i: number) {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
-      return next;
-    });
-  }
+  const filter = useBusScheduleStore((state) => state.filter);
+  const search = useBusScheduleStore((state) => state.search);
+  const expandedServiceIds = useBusScheduleStore((state) => state.expandedServiceIds);
+  const setFilter = useBusScheduleStore((state) => state.setFilter);
+  const setSearch = useBusScheduleStore((state) => state.setSearch);
+  const toggleService = useBusScheduleStore((state) => state.toggleService);
+  const deferredSearch = useDeferredValue(search);
+  const serviceType = filter === "ALL" ? undefined : filter;
+  const busServicesQuery = useBusServicesQuery({
+    serviceType,
+    search: deferredSearch,
+  });
+  const buses = busServicesQuery.data?.data ?? [];
+  const stats = busServicesQuery.data?.meta.stats ?? { all: 0, AKAP: 0, AKDP: 0 };
+  const period = busServicesQuery.data?.meta.period;
+  const terminalLabel = period
+    ? `${period.terminal.name} · ${period.terminal.regency ?? "Kab. Purworejo"} · ${period.name}`
+    : "Terminal Kutoarjo · Kab. Purworejo · April 2026";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -91,7 +87,7 @@ export default function Home() {
                 Informasi Keberangkatan Bus
               </h1>
               <p className="text-slate-400 text-xs mt-1">
-                Terminal Kutoarjo · Kab. Purworejo · April 2026
+                {terminalLabel}
               </p>
             </div>
           </div>
@@ -106,9 +102,9 @@ export default function Home() {
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-5 py-4 flex gap-6">
           {[
-            { label: "Total PO", value: busData.length, color: "text-slate-700" },
-            { label: "AKAP", value: akapCount, color: "text-blue-600" },
-            { label: "AKDP", value: akdpCount, color: "text-emerald-600" },
+            { label: "Total PO", value: stats.all, color: "text-slate-700" },
+            { label: "AKAP", value: stats.AKAP, color: "text-blue-600" },
+            { label: "AKDP", value: stats.AKDP, color: "text-emerald-600" },
           ].map((s) => (
             <div key={s.label} className="flex items-baseline gap-2">
               <span className={`text-2xl font-bold ${s.color}`}>{s.value}</span>
@@ -124,7 +120,7 @@ export default function Home() {
         {/* Controls */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="flex gap-1 bg-slate-200/70 p-1 rounded-xl w-fit">
-            {(["ALL", "AKAP", "AKDP"] as const).map((v) => (
+            {(["ALL", "AKAP", "AKDP"] as const satisfies readonly BusScheduleFilter[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setFilter(v)}
@@ -146,10 +142,7 @@ export default function Home() {
               type="text"
               placeholder="Cari nama PO atau rute…"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                if (e.target.value) setFilter("ALL");
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition placeholder-slate-400"
             />
           </div>
@@ -157,7 +150,9 @@ export default function Home() {
 
         {/* Result count */}
         <p className="text-xs text-slate-400 mb-4 font-medium tracking-wide uppercase">
-          {filtered.length} hasil · klik baris untuk lihat jadwal lengkap
+          {busServicesQuery.isLoading
+            ? "Memuat data dari database..."
+            : `${buses.length} hasil · klik baris untuk lihat jadwal lengkap`}
         </p>
 
         {/* Table card */}
@@ -177,7 +172,21 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {busServicesQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-16 text-center text-slate-400 text-sm">
+                      Memuat jadwal bus...
+                    </td>
+                  </tr>
+                ) : busServicesQuery.isError ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-16 text-center text-red-500 text-sm">
+                      {busServicesQuery.error instanceof Error
+                        ? busServicesQuery.error.message
+                        : "Gagal memuat data jadwal"}
+                    </td>
+                  </tr>
+                ) : buses.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-5 py-16 text-center text-slate-400 text-sm">
                       <div className="flex flex-col items-center gap-2">
@@ -187,9 +196,9 @@ export default function Home() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((bus, i) => {
+                  buses.map((bus, i) => {
                     const isAkap = bus.jenis_layanan === "AKAP";
-                    const isOpen = expandedRows.has(i);
+                    const isOpen = expandedServiceIds.has(bus.id);
                     const accentBar = isAkap ? "bg-blue-500" : "bg-emerald-500";
                     const chipBase = isAkap
                       ? "bg-blue-50 text-blue-700 border-blue-100"
@@ -200,10 +209,10 @@ export default function Home() {
                     const remainingCount = bus.jadwal.length - PREVIEW_COUNT;
 
                     return (
-                      <Fragment key={i}>
+                      <Fragment key={bus.id}>
                         {/* ── Main row ── */}
                         <tr
-                          onClick={() => toggleRow(i)}
+                          onClick={() => toggleService(bus.id)}
                           className={`border-t border-slate-100 cursor-pointer select-none transition-colors ${
                             isOpen ? (isAkap ? "bg-blue-50/30" : "bg-emerald-50/30") : "hover:bg-slate-50"
                           }`}
@@ -313,7 +322,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-6 pb-8 text-center text-xs text-slate-400">
-        Data Terminal Kutoarjo · April 2026
+        Data {period?.terminal.name ?? "Terminal Kutoarjo"} · {period?.name ?? "April 2026"}
       </footer>
     </div>
   );
