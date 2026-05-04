@@ -32,9 +32,7 @@ const navigationGroups = [
 
 const themeStorageKey = "bus-schedule-dashboard-theme";
 
-function getInitialDashboardTheme() {
-  if (typeof window === "undefined") return false;
-
+function getStoredDashboardTheme() {
   const storedTheme = window.localStorage.getItem(themeStorageKey);
 
   return (
@@ -50,16 +48,29 @@ function applyDashboardTheme(enabled: boolean) {
 
 export function DashboardSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [darkMode, setDarkMode] = useState(getInitialDashboardTheme);
+  const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
-    applyDashboardTheme(darkMode);
-    window.localStorage.setItem(themeStorageKey, darkMode ? "dark" : "light");
-  }, [darkMode]);
+    const enabled = getStoredDashboardTheme();
+    applyDashboardTheme(enabled);
+
+    const frame = window.requestAnimationFrame(() => {
+      setDarkMode(enabled);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   function toggleDarkMode() {
-    setDarkMode((value) => !value);
+    setDarkMode((value) => {
+      const nextTheme = !value;
+
+      applyDashboardTheme(nextTheme);
+      window.localStorage.setItem(themeStorageKey, nextTheme ? "dark" : "light");
+
+      return nextTheme;
+    });
   }
 
   return (
