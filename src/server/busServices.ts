@@ -146,6 +146,36 @@ export function getBusServices(filters: BusServicesFilters = {}): BusServicesRes
   };
 }
 
+export function getBusServiceById(serviceId: number): BusServiceDto | null {
+  const rows = db
+    .select({
+      serviceId: busServices.id,
+      serviceTypeCode: busServices.serviceTypeCode,
+      distanceText: busServices.distanceText,
+      fareMin: busServices.fareMin,
+      fareMax: busServices.fareMax,
+      fareText: busServices.fareText,
+      operatorId: operators.id,
+      operatorName: operators.name,
+      routeId: routes.id,
+      routeText: routes.routeText,
+      originName: routes.originName,
+      destinationName: routes.destinationName,
+      distanceKm: routes.distanceKm,
+      routeDistanceText: routes.distanceText,
+      departureTime: departureSchedules.departureTime,
+    })
+    .from(busServices)
+    .innerJoin(operators, eq(operators.id, busServices.operatorId))
+    .innerJoin(routes, eq(routes.id, busServices.routeId))
+    .leftJoin(departureSchedules, eq(departureSchedules.busServiceId, busServices.id))
+    .where(eq(busServices.id, serviceId))
+    .orderBy(departureSchedules.sortOrder, departureSchedules.departureTime)
+    .all() as ServiceRow[];
+
+  return groupServiceRows(rows)[0] ?? null;
+}
+
 function getSelectedPeriod(periodId?: number): SchedulePeriodDto | null {
   const periods = getSchedulePeriods();
 
